@@ -1,6 +1,7 @@
 package com.etlgp;
 
 import java.sql.*;
+import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -44,8 +45,7 @@ public class ETLService {
 	public static class ultima_lectura {
 		 
         private String estacion;
-        private String time;   
-       
+        private String time;         
  
         private ultima_lectura (String _Estacion, String _Time  ) {
            
@@ -60,23 +60,21 @@ public class ETLService {
 	public static void main(String[] args) throws IOException, JSONException {
 		// TODO Auto-generated method stub	
 	
-
 		    url_update();
-  
-		
+  		
 		
 	}
 	
 	
 	private static void url_update() throws IOException, JSONException
 	{
-
+		  System.out.println("Please Wait... ");
 		 try {
-			    System.out.println("Connect to URL ...");
+			    System.out.println("Connecting to Web Service...");
 			    String url ="http://localhost/projects/PDCMLCC_WEB/PDCMLCC/controller/ultimas_lecturas.php";
 			    JSONObject json = readJsonFromUrl(url);
 			    String op1=((String)json.get("estatus"));
-			    System.out.println("URL Response :"+op1);
+			    System.out.println("Web Service Status : "+op1);
 			    obtener_ultimas_lecturas();
 		    } catch (Exception e) {
 		       
@@ -88,8 +86,7 @@ public class ETLService {
 	
 	public static void obtener_ultimas_lecturas() throws IOException, JSONException
 	{
-		/**Obtenemos Hora de ultima lectura en servidor GP **/
-		
+				
 		List<ultima_lectura> ultimas_lecturas = new ArrayList<ultima_lectura>();
 		String URL  ="jdbc:mysql://127.0.0.1:3306/gpconsul_pdc?autoReconnect=true&useSSL=false";
 		String user ="root";
@@ -109,25 +106,25 @@ public class ETLService {
 				  }
 				}
 			 statement.close();				
-		     System.out.println("Ready..last lectors is in the chache..");
+		     System.out.println("Ready.. last lectors are in the dynamic memory..");
 		    
 	 
 	        } catch (SQLException ex) {
 	        	System.out.println("Error handle Database GP");
 	      }
-    	 obtener_lecturas_remotas(ultimas_lecturas);   	
+    	 obtener_lecturas_remotas(ultimas_lecturas);  
     	   	   	
-    	
 		
 	}
 	public static void obtener_lecturas_remotas(List<ultima_lectura> ultimas_lecturas)
 	{
-		List<lectura> lecturas = new ArrayList<lectura>();    
+		List<lectura> lecturas = new ArrayList<lectura>();
+		int encountered = 0;
 		
 		/***********************************/
 			String date_init = get_date_start() ;		
 			String date_finish =  get_date_finish();	
-			System.out.println("Actual datetime:"+date_finish);
+			System.out.println("Actual Datetime : "+date_finish);
 		/***********************************/	
 	    	String URL="jdbc:sqlserver://sqlsvrccazint01.database.windows.net:1433;";
 	    	String database="database=MLCCSMADATA;";
@@ -141,15 +138,21 @@ public class ETLService {
     		Statement s = connection.createStatement();	
     		for (int i = 0; i <= ultimas_lecturas.size()-1; i++) {
     			
-    			 SQL ="select  IDEstacion, TIMESTAMP,Caudal,Conductividad,Nivel,PH,Temperatura from dbo.PozosSMA_GPConsultores  where TIMESTAMP BETWEEN '"+ultimas_lecturas.get(i).time+"' AND '"+date_finish+"' AND IDEstacion = '"+ultimas_lecturas.get(i).estacion+"';";
-    			 System.out.println("Searching entries for "+ultimas_lecturas.get(i).estacion);
+    			 encountered =0;
+    			//SQL ="select  IDEstacion, TIMESTAMP,Caudal,Conductividad,Nivel,PH,Temperatura from dbo.PozosSMA_GPConsultores  where TIMESTAMP  BETWEEN '"+ultimas_lecturas.get(i).time+"' AND '"+date_finish+"' AND IDEstacion = '"+ultimas_lecturas.get(i).estacion+"';";
+    			 SQL ="select  IDEstacion, TIMESTAMP,Caudal,Conductividad,Nivel,PH,Temperatura from dbo.PozosSMA_GPConsultores  where TIMESTAMP > '"+ultimas_lecturas.get(i).time+"' AND  TIMESTAMP <  '"+date_finish+"' AND IDEstacion = '"+ultimas_lecturas.get(i).estacion+"';"; 
+    			// System.out.println(SQL);
+    			// System.out.println("Searching entries for "+ultimas_lecturas.get(i).estacion+" "+percentage(i,ultimas_lecturas.size()));
     			 ResultSet rs = s.executeQuery (SQL);
     			 while (rs.next())
     			 {
     	     
     			        lecturas.add(new lectura(rs.getString (1), rs.getString (2), rs.getString (3), rs.getString (4), rs.getString (5), rs.getString (6), rs.getString (7)));
-  	  		      
+  	  		            encountered ++;
     			 }
+    			 System.out.println("Searching entries for "+ultimas_lecturas.get(i).estacion+" >"+ultimas_lecturas.get(i).time+" Process => "+percentage(i,ultimas_lecturas.size()-1)+ " Result => "+ encountered );
+    			 //System.out.println("Encounted for "+ultimas_lecturas.get(i).estacion+": "+encountered);
+    			 
     			
     		}
     		connection.close();	
@@ -161,8 +164,8 @@ public class ETLService {
 		  System.out.println("Error connection Extract server");
 		}
     	
-    	System.out.println("Total entries encountered :"+lecturas.size());
-    	show_data_server(lecturas); //Show data encountered
+    	System.out.println("Total entries encountered : "+lecturas.size());
+    	//show_data_server(lecturas); //Show data encountered
     	transaction_server(lecturas); //Process data encountered 	   	
     	
     			
@@ -189,6 +192,10 @@ public class ETLService {
 		return email;			
 		
 	}
+	public static String percentage(int contador , int lecturas){
+	    float p = contador*100/lecturas;
+		return p+" %";	
+	}
 	public static String get_date_finish(){
 		
 	
@@ -205,8 +212,7 @@ public class ETLService {
     	  fecha.add(Calendar.HOUR, -6);    	  
 		  String actual_date = String.format("%1$tY-%1$tm-%1$td %1$tH:%1$tM:%1$tS", fecha);
 		  return actual_date;   	 
-    	
-    	
+    	   	
 		
 	}
     public static void connection_server(String dateStart,String dateSend )
@@ -240,13 +246,9 @@ public class ETLService {
 		{
 		  System.out.println("Error Connection Extract Server");
 		}
-		System.out.println("extrac_lectors=>"+(lecturas.size()));
+		System.out.println("extrac_lectors=>"+(lecturas.size()));		
 		
-		
-		//show_data_server(lecturas);
-		//load_remote_server(lecturas);
-		transaction_server(lecturas);
-		
+		transaction_server(lecturas);	
 	
 		
     }
@@ -276,23 +278,23 @@ public class ETLService {
 		String user ="root";
     	String pwd  ="";
     	
-    	 try ( Connection connection = DriverManager.getConnection(URL,user,pwd);)
-    	     {
+    	 try ( Connection connection = DriverManager.getConnection(URL,user,pwd);){
 		 
-				 CallableStatement statement = connection.prepareCall("{call db_insert(?, ?, ?, ?, ?, ? ,?)}");
-				 for (int i = 0; i <= lecturas.size()-1; i++)
-				 {
-					 System.out.println("processing..."+i+" of "+(lecturas.size()-1));
-								
-					    statement.setString(1, lecturas.get(i).estacion);
-			            statement.setString(2, lecturas.get(i).time);
-			            statement.setString(3, lecturas.get(i).ph);
-			            statement.setString(4, convert_ce(lecturas.get(i).conductividad));
-			            statement.setString(5, lecturas.get(i).temperatura);
-			            statement.setString(6, lecturas.get(i).caudal);
-			            statement.setString(7, lecturas.get(i).nivel);		 
-			            statement.execute();          
-			         					 
+				 CallableStatement statement = connection.prepareCall("{call db_insert(?, ?, ?, ?, ?, ? ,?, ?)}");
+				 
+				 for (int i = 0; i <= lecturas.size()-1; i++){
+					 
+					 System.out.println("processing... "+i+" of "+(lecturas.size()-1)+" tasks "+ percentage(i,lecturas.size()-1));								
+					 statement.setString(1,  lecturas.get(i).estacion);
+					 statement.setString(2,  get_date_finish());
+			         statement.setString(3,  lecturas.get(i).time);
+			         statement.setString(4,  convert_2f(lecturas.get(i).ph));
+			         statement.setString(5,  convert_ce(lecturas.get(i).conductividad));
+	                 statement.setString(6,  convert_2f(lecturas.get(i).temperatura));
+		             statement.setString(7,  convert_2f(lecturas.get(i).caudal));
+		             statement.setString(8,  convert_2f(lecturas.get(i).nivel));		 
+		             boolean b = statement.execute(); 
+		            			         					 
 				 }
 			     statement.close();		           
 			     System.out.println("Stored procedure called successfully!");
@@ -308,19 +310,33 @@ public class ETLService {
         if(conductividad!=null){
         	
         	float f=Float.parseFloat(conductividad)*1000;    
-        	return Float.toString(f);
+        	return String.format("%.0f", f);
         }
         else {
         	return null;
         }
     	
     }
+    public static String convert_2f(String dato) {
+    	
+    	  if(dato!=null){
+    		  
+    		  float f=Float.parseFloat(dato)*1;    
+          	  return String.format("%.2f", f);        	
+          
+          }
+          else {
+          	return null;
+          }
+    	
+    }
+    
     
     public static void show_data_server(List<lectura> lecturas){
     	
     	for (int i = 0; i <= lecturas.size()-1; i++)
 		{
-    		System.out.println("estacion: " + lecturas.get(i).estacion +" fecha:"+lecturas.get(i).time+ " caudal: " +lecturas.get(i).caudal+ " "+"conductividad:"+convert_ce(lecturas.get(i).conductividad)+" "+"nivel :"+lecturas.get(i).nivel+ "ph : "+lecturas.get(i).ph);
+    	  System.out.println("estacion: " + lecturas.get(i).estacion +" fecha:"+lecturas.get(i).time+ " caudal: " +lecturas.get(i).caudal+ " "+"conductividad:"+convert_ce(lecturas.get(i).conductividad)+" "+"nivel :"+lecturas.get(i).nivel+ "ph : "+lecturas.get(i).ph);
         }
     	    	
     }
