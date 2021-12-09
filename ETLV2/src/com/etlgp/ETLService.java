@@ -1,7 +1,9 @@
 package com.etlgp;
 
 import java.sql.*;
+import java.text.DateFormat;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -10,13 +12,43 @@ import java.util.Scanner;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 import org.json.*;
 
+import java.util.logging.*;
 
 
+
+class MyFormatter extends Formatter {
+    // Create a DateFormat to format the logger timestamp.
+    private static final DateFormat df = new SimpleDateFormat("dd/MM/yyyy hh:mm:ss.SSS");
+
+    public String format(LogRecord record) {
+        StringBuilder builder = new StringBuilder(1000);
+        builder.append(df.format(new Date(record.getMillis()))).append(" - ");
+        builder.append("[").append(record.getSourceClassName()).append(".");
+        builder.append(record.getSourceMethodName()).append("] - ");
+        builder.append("[").append(record.getLevel()).append("] - ");
+        builder.append(formatMessage(record));
+       /* builder.append("\n");*/
+        builder.append(System.lineSeparator());
+        return builder.toString();
+    }
+
+    public String getHead(Handler h) {
+        return super.getHead(h);
+    }
+
+    public String getTail(Handler h) {
+        return super.getTail(h);
+    }
+}
 
 public class ETLService {
 	
+	private final static Logger LOGGER = Logger.getLogger("com.etlgp");
 	
 	public static class lectura {
 		 
@@ -58,27 +90,53 @@ public class ETLService {
     }
 	
 	public static void main(String[] args) throws IOException, JSONException {
-		// TODO Auto-generated method stub	
-	
+		// TODO Auto-generated method stub			
+			
+		    configure_logs();	
 		    url_update();
   		
 		
 	}
-	
+	 private static void configure_logs() throws SecurityException, IOException {
+		
+		 boolean append = false;
+		 Logger logger = Logger.getLogger("etl_log"); 
+		 logger.setUseParentHandlers(append); 
+		 String pathLog = "C:/Datos/MyLog.log";
+		 FileHandler fhandler = new FileHandler(pathLog,true);  	 
+		 
+		
+		 try {     
+
+			    logger.addHandler(fhandler);		
+			    MyFormatter formatter = new MyFormatter();
+			    fhandler.setFormatter(formatter);  
+
+			} catch (SecurityException e){  
+			    e.printStackTrace();  
+			    logger.info("error generating LOGS");
+			} 			 
+	 }	 
+	 
 	
 	private static void url_update() throws IOException, JSONException
-	{
-		  System.out.println("Please Wait... ");
+	{ 
+		Logger logger = Logger.getLogger("etl_log");
+		 
+		 logger.info("Starting ...");
 		 try {
 			    System.out.println("Connecting to Web Service...");
+			    logger.info("Connecting to web service...");
 			    String url ="http://localhost/projects/PDCMLCC_WEB/PDCMLCC/controller/ultimas_lecturas.php";
 			    JSONObject json = readJsonFromUrl(url);
 			    String op1=((String)json.get("estatus"));
+			    logger.info("Reply from Web Service : "+op1);
 			    System.out.println("Web Service Status : "+op1);
 			    obtener_ultimas_lecturas();
-		    } catch (Exception e) {
-		       
+		    } catch (Exception e){
+		        
 		    	System.out.println("I cant resolve the URL..");
+		    	logger.severe("impossible to resolve url "+e);
 		    }
 	}
 		
@@ -86,7 +144,8 @@ public class ETLService {
 	
 	public static void obtener_ultimas_lecturas() throws IOException, JSONException
 	{
-				
+		Logger logger = Logger.getLogger("etl_log");	
+		
 		List<ultima_lectura> ultimas_lecturas = new ArrayList<ultima_lectura>();
 		String URL  ="jdbc:mysql://127.0.0.1:3306/gpconsul_pdc?autoReconnect=true&useSSL=false";
 		String user ="root";
@@ -107,17 +166,19 @@ public class ETLService {
 				}
 			 statement.close();				
 		     System.out.println("Ready.. last lectors are in the dynamic memory..");
-		    
+		     logger.info("last readings obtained from gp database");
 	 
 	        } catch (SQLException ex) {
-	        	System.out.println("Error handle Database GP");
+	        	System.out.println("Error handle gp database");
+	        	 logger.info("Error handle gp database");
 	      }
     	 obtener_lecturas_remotas(ultimas_lecturas);  
     	   	   	
 		
 	}
 	public static void obtener_lecturas_remotas(List<ultima_lectura> ultimas_lecturas)
-	{
+	{   
+		Logger logger = Logger.getLogger("etl_log");	
 		List<lectura> lecturas = new ArrayList<lectura>();
 		int encountered = 0;
 		
@@ -135,6 +196,7 @@ public class ETLService {
     	    	
     	try(Connection connection = DriverManager.getConnection(conexionUrl);)
 		{
+    		logger.info("connection established with mlcc server");
     		Statement s = connection.createStatement();	
     		for (int i = 0; i <= ultimas_lecturas.size()-1; i++) {
     			
@@ -151,21 +213,20 @@ public class ETLService {
   	  		            encountered ++;
     			 }
     			 System.out.println("Searching entries for "+ultimas_lecturas.get(i).estacion+" >"+ultimas_lecturas.get(i).time+" Process => "+percentage(i,ultimas_lecturas.size()-1)+ " Result => "+ encountered );
-    			 //System.out.println("Encounted for "+ultimas_lecturas.get(i).estacion+": "+encountered);
-    			 
-    			
+     			     			
     		}
     		connection.close();	
+    		logger.info("connection terminated with mlcc server");
 		   	System.out.println("Connection has been succesfull with MLCC Server..");
 			System.out.println("Connection Closed ..");
 		} 
 		catch (SQLException e) 
 		{
 		  System.out.println("Error connection Extract server");
+		  logger.info("Error trying to extract readings");
 		}
-    	
-    	System.out.println("Total entries encountered : "+lecturas.size());
-    	//show_data_server(lecturas); //Show data encountered
+    	logger.info("total entries encountered in mlcc database : "+lecturas.size());
+    	System.out.println("Total entries encountered : "+lecturas.size());    
     	transaction_server(lecturas); //Process data encountered 	   	
     	
     			
@@ -254,9 +315,12 @@ public class ETLService {
     }
     public static void transaction_server(List<lectura> lecturas)
     {
+    	
+    	Logger logger = Logger.getLogger("etl_log");	
     	int dataSize = lecturas.size();
     	if(dataSize!=0)
-    	{
+    	{   
+    		logger.info(dataSize+" entries have been sent to  gpserver");
     		System.out.println(dataSize+" Sending to remote server");
     		show_data_server(lecturas);
     		load_remote_server(lecturas);
@@ -264,12 +328,14 @@ public class ETLService {
     	else
     	{
     		System.out.println("List of lectors is empty");
+    		logger.info("No entries found");
     		
     	}
+    	logger.info("Bye.. see you soon.. ");
     }
     public static void load_remote_server(List<lectura> lecturas)
     {
-    	
+    	Logger logger = Logger.getLogger("etl_log");	
     	/*String URL  ="jdbc:mysql://gpcumplimiento.cl:3306/gpcumpli_enlinea?autoReconnect=true&useSSL=false";
     	String user ="gpcumpli_admin";
     	String pwd  ="30cuY2[OAgAr";*/
@@ -277,9 +343,9 @@ public class ETLService {
     	String URL  ="jdbc:mysql://127.0.0.1:3306/gpconsul_pdc?autoReconnect=true&useSSL=false";
 		String user ="root";
     	String pwd  ="";
-    	
+    	int errores =0;
     	 try ( Connection connection = DriverManager.getConnection(URL,user,pwd);){
-		 
+    		 logger.info("transforming & sending data encountered to gpserver...");
 				 CallableStatement statement = connection.prepareCall("{call db_insert(?, ?, ?, ?, ?, ? ,?, ?)}");
 				 
 				 for (int i = 0; i <= lecturas.size()-1; i++){
@@ -293,14 +359,34 @@ public class ETLService {
 	                 statement.setString(6,  convert_2f(lecturas.get(i).temperatura));
 		             statement.setString(7,  convert_2f(lecturas.get(i).caudal));
 		             statement.setString(8,  convert_2f(lecturas.get(i).nivel));		 
-		             boolean b = statement.execute(); 
+		            
+		             try{
+		            	   statement.execute(); 
+		             }
+		             catch (SQLException e){  
+		                	 errores++;
+		            		 logger.severe("error :"+e);
+		             }            
+		             	             
 		            			         					 
 				 }
-			     statement.close();		           
+			     statement.close();	
+			     logger.info("connection with gp database is closed.. ");
 			     System.out.println("Stored procedure called successfully!");
+			     if(errores!=0){
+			    	  
+			    	 logger.severe("data wasnt sent.. you have "+errores+" errors");
+			    	
+			     }
+			     else{
+			    	 
+			    	 logger.info("data was sent successfully..");
+			     }
+			     logger.info("Bye ;) ");		 
 		 
 		        } catch (SQLException ex) {
 		            ex.printStackTrace();
+		            logger.info("error connecting to gp database ");
 		        }
     	
     	 
@@ -312,7 +398,8 @@ public class ETLService {
         	float f=Float.parseFloat(conductividad)*1000;    
         	return String.format("%.0f", f);
         }
-        else {
+        else{
+        	
         	return null;
         }
     	
@@ -325,8 +412,9 @@ public class ETLService {
           	  return String.format("%.2f", f);        	
           
           }
-          else {
-          	return null;
+          else{
+          	
+        	  return null;
           }
     	
     }
@@ -334,8 +422,8 @@ public class ETLService {
     
     public static void show_data_server(List<lectura> lecturas){
     	
-    	for (int i = 0; i <= lecturas.size()-1; i++)
-		{
+    	for (int i = 0; i <= lecturas.size()-1; i++){
+    		
     	  System.out.println("estacion: " + lecturas.get(i).estacion +" fecha:"+lecturas.get(i).time+ " caudal: " +lecturas.get(i).caudal+ " "+"conductividad:"+convert_ce(lecturas.get(i).conductividad)+" "+"nivel :"+lecturas.get(i).nivel+ "ph : "+lecturas.get(i).ph);
         }
     	    	
