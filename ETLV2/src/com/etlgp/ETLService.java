@@ -2,19 +2,14 @@ package com.etlgp;
 
 import java.sql.*;
 import java.text.DateFormat;
-import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Scanner;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-
 import org.json.*;
 
 import java.util.logging.*;
@@ -103,9 +98,8 @@ public class ETLService {
 		 Logger logger = Logger.getLogger("etl_log"); 
 		 logger.setUseParentHandlers(append); 
 		 String pathLog = "C:/Datos/MyLog.log";
-		 FileHandler fhandler = new FileHandler(pathLog,true);  	 
+		 FileHandler fhandler = new FileHandler(pathLog,true);  
 		 
-		
 		 try {     
 
 			    logger.addHandler(fhandler);		
