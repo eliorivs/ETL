@@ -10,8 +10,8 @@ public class SendEmailTLS {
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		
-		    final String username = "erivas@gpconsultores.cl";
-	        final String password = "gp292021";
+		    final String username = "mycount";
+	        final String password = "mypass";
 
 	        Properties prop = new Properties();
 			prop.put("mail.smtp.host", "smtp.gmail.com");
